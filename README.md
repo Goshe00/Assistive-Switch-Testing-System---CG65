@@ -43,8 +43,8 @@ Include an overall idea of what major steps are required to build the device.
 ### 1. Order the 3D printer
 Our testing system will be assembled on a 3D printer. For our project, we've chosen the Ender 3 V2 from [3D Printing Canada](https://3dprintingcanada.com/products/creality-ender-3-v2) since it is CSA and ETL safety certified. So far, this testing system has been implemented on an Ender 3 V2 and you can acquire the same model from any available store.
 
-### 2. Order and assemble the PCB
-The PCB will be used to receive and send signals from the load cell and switch to a computer.
+### 2. Order and assemble the activation circuit
+The activation circuit will be used to receive and send signals from the load cell and switch to a computer.
 
 All of the files and documentation can be found in the [/Hardware/PCB](/Hardware/PCB) folder.
 
@@ -52,8 +52,35 @@ All of the files and documentation can be found in the [/Hardware/PCB](/Hardware
 
 The force sensor includes the load cell and its adapter. It will be used to send signals to the PCB during a testing routine.
 
-All of the documentation can be found in the [/Hardware/Sensor](/Hardware/Sensor) folder. Individual print files of the adapter can be found in [/Hardware/Adapters and Jigs/Load Cell Adapter](/Hardware/Adapters and Jigs/Load Cell Adapter)
+All of the documentation can be found in the [/Hardware/Sensor](/Hardware/Sensor) folder. Individual print files of the adapter can be found in [/Hardware/Adapters and_Jigs/Load Cell Adapter](/Hardware/Adapters_and_Jigs/Load_Cell_Adapter)
 
+### 4. Install and setup Neoprint, our testing system's user interface
+
+Neoprint is a Python program specifically for this testing system that enables the user to set up, run test routines and generate data. 
+
+All of the build documentation and files can be found in the [/Software/Neoprint](/Software/Neoprint) folder. 
+
+### 5. Assemble the force sensor, activation circuit and Neoprint
+
+After assembling and setting up each of the subcomponents, they can be assembled together to build the testing system.
+
+User guides of each subcomponents can be found in their respective folders. 
+
+### 6. Assemble the switch 
+
+The testing procedure starts by deciding which switch is needed to be tested. For this project, we have implemented a testing procedure for the MMC60 switch. 
+
+### 7. Print and assemble the switch adapter
+
+In order for the switch to be fixed on the printbed, an adapter is needed to hold the switch so that it does not move or rotate during testing.
+
+All individual print files and documentation of MMC60 switch and Interact switch can be found in [/Hardware/Adapters and Jigs/MMC60 Jig](/Hardware/Adapters_and_Jigs/MMC60_Jig) folder and [/Hardware/Adapters and Jigs/MMC60 Jig](/Hardware/Adapters_and_Jigs/Interact_Switch_Jig) folder.
+
+### 8. Run testing routine
+
+Now that the testing system is assembled and a switch to test has been chosen, you are ready to run a test!
+
+The detailed testing routine instructions can be found at [/Software/Neoprint](/Software/Neoprint).
 
 ## Files
 <!---
