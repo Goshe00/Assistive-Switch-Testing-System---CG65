@@ -1,15 +1,4 @@
-<!--- 
-Open Source Assistive Technology: GitHub Readme Template
- --->
 
-<!---
-INSTRUCTIONS
-This is a markdown template for creating the README.md file in a GitHub repository. This file is rendered and displayed automatically when someone visits the repository.
-
-This document includes helper text that will not be displayed when rendered. Any text between the less-than sign + exclamation mark + three hyphen-minus (<!---) and matching three hyphen-minus + greater-than sign will not be displayed. This helper text can be deleted once the corresponding section is completed.
-
- --->
- 
  <!--- 
 TITLE
 Should match the name of the GitHub repository. Choose something descriptive rather than whimsical. 
@@ -82,52 +71,15 @@ Now that the testing system is assembled and a switch to test has been chosen, y
 
 The detailed testing routine instructions can be found at [/Software/Neoprint](/Software/Neoprint).
 
-## Files
-<!---
-FILES
-This section includes all the information and files required to build and modify the device, including documentation, design files, and build files. 
---->
-
-### Documentation
-<!---
-DOCUMENTATION
-
---->
-| Document | Version | Link |
-|----------|---------|------|
-| Design Specifications| 1.0 | [ProjectTitle_Design_Specifications](/Documentation//Working_Files/ProjectTitle_Design_Rationale_v0.1.pdf) |
-| Design Rationale     | 1.0 | [ProjectTitle_Design_Rationale](/Documentation/ProjectTitle_Design_Rationale_v0.1.pdf) |
-| Bill of Materials    | 1.0 | [ProjectTitle_BOM](/Documentation/ProjectTitle_BOM_v0.1.xlsx) |
-| Assembly Guide       | 1.0 | [ProjectTitle_Instructions](/Documentation/ProjectTitle_Assembly_Guide_v0.1.pdf) |
-| Maker Checklist      | 1.0 | [ProjectTitle_Checklist](/Documentation/ProjectTitle_Maker_Checklist_v0.1.pdf) |
-| User Quick Guide          | 1.0 | [ProjectTitle_Quick_Guide](/Documentation/ProjectTitle_Quick_Guide_v0.1.pdf)           |
-| Changelog            | 1.0 | [ProjectTitle_Changelog](/Documentation/ProjectTitle_Changelog_v0.1.pdf)               |
-
-### Design Files
-<!---
-DESIGN FILES
-If possible, include a copy of original design files to facilitate easy editing and customization.
---->
- - [CAD Files](/Design_Files/CAD)
- - [PCB Files](/Design_Files/PCB)
-
-### Build Files
-<!---
-BUILD FILES
-This section i
---->
- - [3D Printing Files](/Build_Files/3D_Printing)
- - [Custom PCB Files](/Build_Files/Custom_PCB)
- - [V1.0 3MF](/Build_Files/3D_Printing/ProductTitle_v1.0.3mf)
 
 ## License
 <!---
 LICENSE
 Choose an appropriate license. We recommend an open-source hardware compatible license.
 --->
-Everything needed or used to design, make, test, or prepare the (todo: Project Title) is licensed under the CERN 2.0 Weakly Reciprocal license <https://ohwr.org/project/cernohl/wikis/Documents/CERN-OHL-version-2> (CERN-OHL-W).
+Everything (excluding Ender 3 V2) needed or used to design, make, test, or prepare the Assistive Switch Testing System is licensed under the CERN 2.0 Weakly Reciprocal license <https://ohwr.org/project/cernohl/wikis/Documents/CERN-OHL-version-2> (CERN-OHL-W).
 
-Accompanying material such as instruction manuals, videos, and other copyrightable works that are useful but not necessary to design, make, test, or prepare the (todo: Project Title) are published under a Creative Commons Attribution-ShareAlike 4.0 license <https://creativecommons.org/licenses/by-sa/4.0/> (CC BY-SA 4.0).
+Accompanying material such as instruction manuals, videos, and other copyrightable works that are useful but not necessary to design, make, test, or prepare the Assistive Switch Testing System are published under a Creative Commons Attribution-ShareAlike 4.0 license <https://creativecommons.org/licenses/by-sa/4.0/> (CC BY-SA 4.0).
 
 ## Attribution
 <!---
