@@ -46,9 +46,13 @@ Our testing system will be assembled on a 3D printer. For our project, we've cho
 ### 2. Order and assemble the PCB
 The PCB will be used to receive and send signals from the load cell and switch to a computer.
 
-All of the files and documentation can be in the [/Hardware/PCB](/Hardware/PCB) folder.
+All of the files and documentation can be found in the [/Hardware/PCB](/Hardware/PCB) folder.
 
-### 3. Assemble the components
+### 3. Order and assemble the force sensor
+
+The force sensor includes the load cell and its adapter. It will be used to send signals to the PCB during a testing routine.
+
+All of the documentation can be found in the [/Hardware/Sensor](/Hardware/Sensor) folder. Individual print files of the adapter can be found in [/Hardware/Adapters and Jigs/Load Cell Adapter](/Hardware/Adapters and Jigs/Load Cell Adapter)
 
 
 ## Files
