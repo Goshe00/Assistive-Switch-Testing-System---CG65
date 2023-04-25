@@ -153,5 +153,20 @@ We are committed to cultivating a network of volunteer makers who support people
  - Twitter: [@makermakechange](https://twitter.com/makermakechange)
  - Instagram: [@makersmakingchange](https://www.instagram.com/makersmakingchange)
 
-### Contact Us
+### Contacts
 For technical questions, to get involved, or to share your experience we encourage you to visit [MMC Forum](https://forum.makersmakingchange.com) or contact info@makersmakingchange.com
+
+## About UBC ECE Capstone CG65
+
+We are a group of five Electrical Engineering students that are enrolled in the UBC ECE Capstone program. Our capstone group includes:
+
+1. Daniel Wu, developer of NeoPrint and testing routine
+2. Karat Wannissorn, assisted in documenting and developing NeoPrint
+3. Henry Bryant, designed button activation circuit and force sensor
+4. Sean Fu, assisted in researching force sensor alternatives
+5. Shadeed Lagani, designed 3D models and researched locking jigs 
+
+### Contacts
+For technical questions, contact ubcece65neilsquire@gmail.com
+
+
