@@ -40,13 +40,13 @@ PHOTO
 Include an overall idea of what major steps are required to build the device.
  --->
 
-### 1. Order the Off-The-Shelf Components
-The [Bill of Materials](/Documentation/ProductTitle_BOM_v0.1.xlsx) lists all of the parts and components required to build the Assistive Switch Testing System. The electronic components may be available locally, but will probably need to be ordered online. 
+### 1. Order the 3D printer
+Our testing system will be assembled on a 3D printer. For our project, we've chosen the Ender 3 V2 from [3D Printing Canada](https://3dprintingcanada.com/products/creality-ender-3-v2) since it is CSA and ETL safety certified. So far, this testing system has been implemented on an Ender 3 V2 and you can acquire the same model from any available store.
 
-### 2. Print the 3D Printable components
-Print the components for the switch tester case and choose an option for the case.
+### 2. Order and assemble the PCB
+The PCB will be used to receive and send signals from the load cell and switch to a computer.
 
-All of the files and individual print files can be in the [/Build_Files/3D_Printing_Files](/Build_Files/3D_Printing_Files/) folder.
+All of the files and documentation can be in the [/Hardware/PCB](/Hardware/PCB) folder.
 
 ### 3. Assemble the components
 
