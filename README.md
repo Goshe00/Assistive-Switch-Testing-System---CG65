@@ -52,7 +52,7 @@ All of the files and documentation can be found in the [/Hardware/PCB](/Hardware
 
 The force sensor includes the load cell and its adapter. It will be used to send signals to the PCB during a testing routine.
 
-All of the documentation can be found in the [/Hardware/Sensor](/Hardware/Sensor) folder. Individual print files of the adapter can be found in [/Hardware/Adapters and_Jigs/Load Cell Adapter](/Hardware/Adapters_and_Jigs/Load_Cell_Adapter)
+All of the documentation can be found in the [/Hardware/Sensor](/Hardware/Sensor) folder. Individual print files of the adapter can be found in [/Hardware/Adapters and_Jigs/Load Cell Adapter](/Hardware/Adapters_and_Jigs/Load_Cell_Adapter) folder. The code to configure the microcontroller can be found in [/Software/ESP](/Software/ESP)
 
 ### 4. Install and setup Neoprint, our testing system's user interface
 
