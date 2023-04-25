@@ -41,7 +41,7 @@ All of the files and documentation can be found in the [/Hardware/PCB](/Hardware
 
 The force sensor includes the load cell and its adapter. It will be used to send signals to the PCB during a testing routine.
 
-All of the documentation can be found in the [/Hardware/Sensor](/Hardware/Sensor) folder. Individual print files of the adapter can be found in [/Hardware/Adapters and_Jigs/Load Cell Adapter](/Hardware/Adapters_and_Jigs/Load_Cell_Adapter) folder. The code to configure the microcontroller can be found in [/Software/ESP](/Software/ESP)
+All of the documentation can be found in the [/Hardware/Sensor](/Hardware/Sensor) folder. Individual print files of the adapter can be found in [/3D Printing Files/Load Cell Adapter](/3D_Printing_Files/Load_Cell_Adapter) folder. The code to configure the microcontroller can be found in [/Software/ESP](/Software/ESP)
 
 ### 4. Install and setup Neoprint, our testing system's user interface
 
@@ -63,13 +63,20 @@ The testing procedure starts by deciding which switch is needed to be tested. Fo
 
 In order for the switch to be fixed on the printbed, an adapter is needed to hold the switch so that it does not move or rotate during testing.
 
-All individual print files and documentation of MMC60 switch and Interact switch can be found in [/Hardware/Adapters and Jigs/MMC60 Jig](/Hardware/Adapters_and_Jigs/MMC60_Jig) folder and [/Hardware/Adapters and Jigs/MMC60 Jig](/Hardware/Adapters_and_Jigs/Interact_Switch_Jig) folder.
+All individual print files and documentation of MMC60 switch and Interact switch can be found in [/3D_Printing _Files/MMC60 Jig](/3D_Printing_Files/MMC60_Jig) folder and [/3D Printing Files/MMC60 Jig](/3D_Printing_Files/Interact_Switch_Jig) folder.
 
 ### 8. Run testing routine
 
 Now that the testing system is assembled and a switch to test has been chosen, you are ready to run a test!
 
 The detailed testing routine instructions can be found at [/Software/Neoprint](/Software/Neoprint).
+
+## Future Works
+
+### 1. Locking jigs for other types of assistive switches
+
+For this project, we only focused on building and testing the MMC60 Switch and Interact Switch. The testing routine requires a specific locking jig design for different types of switches. We have developed a Locking Jig Design Guide in [/3D Printing Files](/3D_Printing_Files) for future developments of other types of locking jig designs. 
+
 
 
 ## License
