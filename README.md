@@ -35,7 +35,7 @@ Our testing system will be assembled on a 3D printer. For our project, we've cho
 ### 2. Order and assemble the activation circuit
 The activation circuit will be used to receive and send signals from the load cell and switch to a computer.
 
-All of the files and documentation can be found in the [/Electronics/PCB](/Electronics/PCB) folder.
+All of the files and documentation can be found in the [Electronics/Activation Circuit](/Electronics/Activation_Circuit/) folder.
 
 ### 3. Order and assemble the force sensor
 
