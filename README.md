@@ -35,13 +35,13 @@ Our testing system will be assembled on a 3D printer. For our project, we've cho
 ### 2. Order and assemble the activation circuit
 The activation circuit will be used to receive and send signals from the load cell and switch to a computer.
 
-All of the files and documentation can be found in the [Electronics/Activation Circuit](/Electronics/Activation_Circuit/) folder.
+All of the files and documentation can be found in the [/Electronics/Activation_Circuit/PCB_Assembly_Guide.pdf](https://github.com/Goshe00/Assistive-Switch-Testing-System---CG65/tree/main/Electronics/Activation%20Circuit) folder.
 
 ### 3. Order and assemble the force sensor
 
 The force sensor includes the load cell and its adapter. It will be used to send signals to the PCB during a testing routine.
 
-All of the documentation can be found in the [/Electronics/Sensor](/Electronics/Sensor) folder. Individual print files of the adapter can be found in [/3D Printing Files/Load Cell Adapter](/3D_Printing_Files/Load_Cell_Adapter) folder. The code to configure the microcontroller can be found in [/Software/ESP](/Software/ESP)
+All of the documentation can be found in the [/Electronics/Force Sensor](https://github.com/Goshe00/Assistive-Switch-Testing-System---CG65/tree/main/Electronics/Force%20Sensor) folder. Individual print files of the adapter can be found in [/3D_Printing_Files/Load_Cell_Adapter](https://github.com/Goshe00/Assistive-Switch-Testing-System---CG65/tree/main/3D%20Printing%20Files/Load%20Cell%20Adapter) folder. The code to configure the microcontroller can be found in [/Software/ESP](/Software/ESP)
 
 ### 4. Install and setup Neoprint, our testing system's user interface
 
@@ -63,7 +63,7 @@ The testing procedure starts by deciding which switch is needed to be tested. Fo
 
 In order for the switch to be fixed on the printbed, an adapter is needed to hold the switch so that it does not move or rotate during testing.
 
-All individual print files and documentation of MMC60 switch and Interact switch can be found in [/3D_Printing _Files/MMC60 Jig](/3D_Printing_Files/MMC60_Jig) folder and [/3D Printing Files/MMC60 Jig](/3D_Printing_Files/Interact_Switch_Jig) folder.
+All individual print files and documentation of MMC60 switch and Interact switch can be found in [/3D_Printing_Files/MMC60_Jig](https://github.com/Goshe00/Assistive-Switch-Testing-System---CG65/tree/main/3D%20Printing%20Files/MMC60%20Jig) folder and [/3D_Printing_Files/Interact_Switch_Jig](https://github.com/Goshe00/Assistive-Switch-Testing-System---CG65/tree/main/3D%20Printing%20Files/Interact%20Switch%20Jig) folder.
 
 ### 8. Run testing routine
 
@@ -75,7 +75,7 @@ The detailed testing routine instructions can be found at [/Software/Neoprint](/
 
 ### 1. Locking jigs for other types of assistive switches
 
-For this project, we only focused on building and testing the MMC60 Switch and Interact Switch. The testing routine requires a specific locking jig design for different types of switches. We have developed a Locking Jig Design Guide in [/3D Printing Files](/3D_Printing_Files) for future developments of other types of locking jig designs. 
+For this project, we only focused on building and testing the MMC60 Switch and Interact Switch. The testing routine requires a specific locking jig design for different types of switches. We have developed a Locking Jig Design Guide in [/3D Printing Files](https://github.com/Goshe00/Assistive-Switch-Testing-System---CG65/blob/main/3D%20Printing%20Files/Locking%20Jig%20Design%20Guide.pdf) for future developments of other types of locking jig designs. 
 
 
 
