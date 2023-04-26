@@ -20,7 +20,7 @@ NeoPrint is an application developed to test a cylindrical assistive switch base
  3) Run `main_window.py`
  4) Install libraries and dependencies as prompted in the console
 
-This will launch the main window of the application, which includes a mode selection dialog. Users can choose between single-point and multi-point tests by selecting the appropriate radio button and clicking the "OK" button. See README.md inside the NeoPrint folder for more detailed instructions. 
+This will launch the main window of the application, which includes a mode selection dialog. Users can choose between single-point and multi-point tests by selecting the appropriate radio button and clicking the "OK" button. See README.md inside the NeoPrint folder for further instructions. 
 
 ## Features
 
