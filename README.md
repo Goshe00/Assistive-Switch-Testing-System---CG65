@@ -15,7 +15,7 @@ We are from UBC ECE Capstone Group CG65 and our project is to build a cost-effec
 PHOTO
 
  --->
-![Image Description](Photos/Device_Photo.jpg)
+![Assistive Switch Testing System Full Setup](Pictures/FullSetup.jpg)
 
 <!--- 
 ## More info at
