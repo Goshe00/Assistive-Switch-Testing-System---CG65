@@ -1,0 +1,1678 @@
+'''
+Import
+'''
+import sys
+import time
+import threading
+import serial
+import math
+import re
+from PyQt6.QtCore import QTimer
+from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QMovie
+
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QComboBox, QGroupBox,  \
+    QPushButton, QHBoxLayout, QVBoxLayout, QTextEdit, QMenuBar, QDialog, QDialogButtonBox, QFormLayout, QRadioButton, QMenu
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+
+import pyqtgraph as pg
+import numpy as np
+from scipy.ndimage import gaussian_filter
+from matplotlib.patches import Circle
+
+import tkinter
+
+BUTTON_MAX_COORD = 60 #assuming circular button
+
+#from areamode import AreaModeFunc
+
+class HeatmapWidget(QWidget):
+
+    def __init__(self, data_type, parent=None):
+        super().__init__(parent)
+        self.data_type = data_type
+        self.data = []  # initialize data as an empty array
+        self.init_heatmap()
+
+        # Create a Figure and add it to a FigureCanvas
+        self.fig = Figure()
+        self.canvas = FigureCanvas(self.fig)
+        self.window_size = 60
+
+        # Create axis, circle, and colorbar only once
+        self.ax = self.fig.add_subplot(1, 1, 1)
+        self.circle = Circle((self.window_size / 2, self.window_size / 2),
+                             radius=self.window_size / 2, edgecolor='black', facecolor='none')
+        self.ax.add_patch(self.circle)
+        self.colorbar = None
+
+        # Draw the heatmap on the canvas
+        self.draw_heatmap()
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.canvas)
+
+    def init_heatmap(self):
+        global BUTTON_MAX_COORD
+
+        self.window_size = 60
+        self.heatmap = np.zeros((self.window_size, self.window_size))
+
+        for x, y, activation_distance, activation_force in self.data:
+            xi, yi = self.normalize_coordinates(x, y)  # Normalize the x and y coordinates here
+            xi, yi = int(xi), int(yi)
+            if self.data_type == 'force':
+                weight = float(activation_force) * self.window_size / max(
+                    [float(point[3]) for point in self.data])  # Convert to float
+            elif self.data_type == 'distance':
+                weight = float(activation_distance) * self.window_size / max(
+                    [float(point[2]) for point in self.data])  # Convert to float
+            self.heatmap[yi, xi] += weight
+
+        self.sigma = 10
+        self.smoothed_heatmap = gaussian_filter(self.heatmap, self.sigma)
+
+        y, x = np.ogrid[-self.window_size // 2:self.window_size // 2, -self.window_size // 2:self.window_size // 2]
+        self.mask = x ** 2 + y ** 2 <= (self.window_size // 2) ** 2
+
+    def update_heatmap(self, data_array):
+        # Normalize the x and y coordinates and convert activation_distance and activation_force to float
+        self.data = data_array
+        self.init_heatmap()
+        self.draw_heatmap()
+
+    def draw_heatmap(self):
+        self.ax.clear()
+
+        colormap = plt.get_cmap('YlOrBr')
+        image = colormap(self.smoothed_heatmap)
+        image[~self.mask, 3] = 0
+
+        heatmap = self.ax.imshow(image, origin='lower', extent=[0, self.window_size, 0, self.window_size], aspect='auto',
+                                 cmap=colormap)
+
+        if self.colorbar is None:
+            self.colorbar = self.fig.colorbar(heatmap)
+        else:
+            self.colorbar.update_normal(heatmap)
+
+        self.colorbar.set_label('Activation Force' if self.data_type == 'force' else 'Activation Distance')
+
+        if self.data:  # Check if self.data is not empty
+            activation_distances = [point[2] for point in self.data]
+            activation_forces = [point[3] for point in self.data]
+            normalized_distances = np.interp(activation_distances,
+                                             (min(activation_distances), max(activation_distances)),
+                                             (0, 1))
+            normalized_forces = np.interp(activation_forces, (0, max(activation_forces)), (0, 1))
+
+            for i, (x, y, _, _) in enumerate(self.data):
+                xi, yi = self.normalize_coordinates(x, y)
+                if self.data_type == 'force':
+                    self.ax.scatter(xi, yi, color=colormap(normalized_forces[i]), s=125, edgecolors='black', marker='o')
+                else:
+                    self.ax.scatter(xi, yi, color=colormap(normalized_distances[i]), s=125, edgecolors='black', marker='o')
+
+        self.ax.add_patch(self.circle)
+
+        self.ax.set_title('Activation Heatmap - ' + ('Force' if self.data_type == 'force' else 'Distance'))
+        self.ax.set_xlabel('X Coordinate')
+        self.ax.set_ylabel('Y Coordinate')
+        self.ax.set_facecolor((0, 0, 0, 0))
+
+
+
+        self.canvas.draw()
+
+    def normalize_coordinates(self, x, y):
+        max_coord = 300
+        new_center = [133.5, 119.8]
+        return ((x - new_center[0] + BUTTON_MAX_COORD / 2), (y - new_center[1] + BUTTON_MAX_COORD / 2))
+
+
+
+class SingleModeWindow(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.serial = None
+        self.ESPserial = None
+        self.location = None  # Initialize location variable
+        self.location_lock = threading.Lock()
+        self.button_not_pressed = True
+        self.point_coords = None
+
+        #self.gf = general_function
+        self.force_data = None
+        self.distance_data = None
+        self.activation = None
+        self.on_surface = False
+        self.current_z = None
+
+        self.local_increment_record = None
+        self.local_increment_list = []
+        self.z_activation = None
+        self.z_activation_list = []
+
+        self.surface_z = None
+
+        #################
+        self.status = {
+            'printer': 'Offline',
+            'microcontroller': 'Offline',
+        }
+        #################
+# 4/22
+        self.x_input = None
+        self.y_input = None
+
+        #################
+
+        self.init_ui()
+
+    def init_ui(self):
+        main_layout = QHBoxLayout(self)
+
+        # Create left layout
+        left_layout = QVBoxLayout()
+
+        # Group 3D printer and microcontroller layouts in separate QGroupBoxes
+        printer_groupbox = QGroupBox("3D Printer")
+        microcontroller_groupbox = QGroupBox("Microcontroller")
+
+        printer_layout = self.create_printer_layout()
+        microcontroller_layout = self.create_microcontroller_layout()
+
+        printer_groupbox.setLayout(printer_layout)
+        microcontroller_groupbox.setLayout(microcontroller_layout)
+
+        left_layout.addWidget(printer_groupbox)
+        left_layout.addWidget(microcontroller_groupbox)
+
+        # Add left layout to the main layout
+        main_layout.addLayout(left_layout)
+
+        # Create right layout
+        right_layout = QVBoxLayout()
+
+        # Add status layout
+        status_groupbox = QGroupBox("Status")
+        status_layout = self.create_status_layout()
+        status_groupbox.setLayout(status_layout)
+        right_layout.addWidget(status_groupbox)
+
+        # Add test result text
+        self.test_result_label = QLabel('Test Result:')
+        right_layout.addWidget(self.test_result_label)
+
+        self.test_result_textedit = QTextEdit()
+        self.test_result_textedit.setReadOnly(True)
+        right_layout.addWidget(self.test_result_textedit)
+
+        # Add right layout to the main layout
+        main_layout.addLayout(right_layout)
+
+        self.setWindowTitle('NeoPrint - Single Mode')
+        self.resize(400, 200)
+
+    def display_test_results(self):
+        results_str = ''
+        for point in self.point_coords:
+            x_coord = point[0]
+            y_coord = point[1]
+            activation_distance = point[2]
+            activation_force = point[3]
+            point_str = f"x_coord: {x_coord}\n" \
+                        f"y_coord: {y_coord}\n" \
+                        f"activation_distance: {activation_distance:.2f}\n" \
+                        f"activation_force: {activation_force}\n\n"
+            results_str += point_str
+        self.test_result_textedit.setText(results_str)
+
+    def create_printer_layout(self):
+
+        # Create 3D printer layout
+        printer_layout = QVBoxLayout()
+
+        printer_layout.setSpacing(10)
+
+        # Create button layout
+        button_layout = QHBoxLayout()
+        button_label = QLabel('Button Model:')
+        button_layout.addWidget(button_label)
+        self.button_combo = QComboBox()
+        self.button_combo.addItems(['Button Profile 1', 'Button Profile 2'])
+        button_layout.addWidget(self.button_combo)
+        self.test_button = QPushButton('Test')
+        self.test_button.clicked.connect(self.TEST)
+        button_layout.addWidget(self.test_button)
+        printer_layout.addLayout(button_layout)
+
+
+
+
+
+# 4/22
+################################
+        # Create switch location input layout
+        switch_location_layout = QHBoxLayout()
+
+        self.switch_location_label = QLabel('Switch location (x, y):')
+        switch_location_layout.addWidget(self.switch_location_label)
+
+        self.x_input = QTextEdit(self)
+        self.x_input.setMaximumHeight(28)
+        self.x_input.setMaximumWidth(80)
+        switch_location_layout.addWidget(self.x_input)
+
+        self.y_input = QTextEdit(self)
+        self.y_input.setMaximumHeight(28)
+        self.y_input.setMaximumWidth(80)
+        switch_location_layout.addWidget(self.y_input)
+
+        self.generate_button = QPushButton('Generate')
+        self.generate_button.clicked.connect(self.click_to_generate_points)
+        switch_location_layout.addWidget(self.generate_button)
+
+        printer_layout.addLayout(switch_location_layout)
+
+        # Create Test button
+        self.TESTbutton = QPushButton('TESTBY')
+        self.TESTbutton.clicked.connect(self.TEST)
+        switch_location_layout.addWidget(self.TESTbutton)
+
+
+
+
+
+#######################################
+        # Create port layout
+        port_layout = QHBoxLayout()
+        port_label = QLabel('Port:')
+        port_layout.addWidget(port_label)
+        self.port_combo = QComboBox()
+        self.port_combo.addItems(['COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8'])
+        port_layout.addWidget(self.port_combo)
+
+        # Create baud layout
+        baud_layout = QHBoxLayout()
+        baud_label = QLabel('Baud Rate:')
+        baud_layout.addWidget(baud_label)
+        self.baud_combo = QComboBox()
+        self.baud_combo.addItems(['9600', '19200', '38400', '57600', '115200'])
+        baud_layout.addWidget(self.baud_combo)
+
+        # Create connect button layout
+        connect_layout = QHBoxLayout()
+        self.connect_button = QPushButton('Connect')
+        self.connect_button.clicked.connect(self.connect)
+        connect_layout.addWidget(self.connect_button)
+
+        # Combine port and baud layouts
+        port_baud_layout = QHBoxLayout()
+        port_baud_layout.addLayout(port_layout)
+        port_baud_layout.addLayout(baud_layout)
+        port_baud_layout.addLayout(connect_layout)
+        printer_layout.addLayout(port_baud_layout)
+
+        # Create send layout
+        send_layout = QHBoxLayout()
+        send_label = QLabel('Send:')
+        send_layout.addWidget(send_label)
+        self.send_edit = QTextEdit()
+        self.send_edit.setMaximumHeight(80)  # set maximum height to 50 pixels
+        send_layout.addWidget(self.send_edit)
+        self.send_button = QPushButton('Send')
+        self.send_button.setEnabled(False)
+        self.send_button.clicked.connect(self.send)
+        send_layout.addWidget(self.send_button)
+        printer_layout.addLayout(send_layout)
+
+        # Create receive layout
+        receive_layout = QHBoxLayout()
+        receive_label = QLabel('Receive:')
+        receive_layout.addWidget(receive_label)
+        self.debug_monitor = QTextEdit()
+        self.debug_monitor.setMaximumHeight(100)  # set maximum height to 50 pixels
+        self.debug_monitor.setReadOnly(True)
+        receive_layout.addWidget(self.debug_monitor)
+        printer_layout.addLayout(receive_layout)
+
+
+        return printer_layout
+
+    def click_to_generate_points(self):
+        self.point_coords = []
+        x_coord = float(self.x_input.toPlainText())
+        y_coord = float(self.y_input.toPlainText())
+        self.point_coords.append([x_coord, y_coord, None, None])
+        print(self.point_coords)
+
+
+    def updatePointGeneration(self):
+        if self.rings_radio.isChecked():
+            self.test_point_label.setText('Number of Rings:')
+        else:
+            self.test_point_label.setText('Number of Points:')
+
+
+    def create_microcontroller_layout(self):
+        microcontroller_layout = QVBoxLayout()
+        microcontroller_layout.setSpacing(10)
+
+        # Create microcontroller port layout
+        microcontroller_port_layout = QHBoxLayout()
+        microcontroller_port_label = QLabel('Microcontroller Port:')
+        microcontroller_port_layout.addWidget(microcontroller_port_label)
+        self.microcontroller_port_combo = QComboBox()
+        self.microcontroller_port_combo.addItems(['COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8'])
+        microcontroller_port_layout.addWidget(self.microcontroller_port_combo)
+
+        # Create microcontroller baud layout
+        microcontroller_baud_layout = QHBoxLayout()
+        microcontroller_baud_label = QLabel('Microcontroller Baud Rate:')
+        microcontroller_baud_layout.addWidget(microcontroller_baud_label)
+        self.microcontroller_baud_combo = QComboBox()
+        self.microcontroller_baud_combo.addItems(['9600', '19200', '38400', '57600', '115200'])
+        microcontroller_baud_layout.addWidget(self.microcontroller_baud_combo)
+
+        # Create microcontroller connect button layout
+        microcontroller_connect_layout = QHBoxLayout()
+        self.microcontroller_connect_button = QPushButton('Connect')
+        self.microcontroller_connect_button.clicked.connect(self.connect_microcontroller)
+        microcontroller_connect_layout.addWidget(self.microcontroller_connect_button)
+
+        # Combine microcontroller port, baud, and connect button layouts
+        microcontroller_port_baud_layout = QHBoxLayout()
+        microcontroller_port_baud_layout.addLayout(microcontroller_port_layout)
+        microcontroller_port_baud_layout.addLayout(microcontroller_baud_layout)
+        microcontroller_port_baud_layout.addLayout(microcontroller_connect_layout)
+
+        # Add microcontroller port and baud layouts to main layout
+        microcontroller_layout.addLayout(microcontroller_port_baud_layout)
+
+        # Create microcontroller debug monitor layout
+        receive_layout_microcontroller = QHBoxLayout()
+        receive_label_microcontroller = QLabel('Microcontroller Receive:')
+        receive_layout_microcontroller.addWidget(receive_label_microcontroller)
+        self.microcontroller_debug_monitor = QTextEdit()
+        self.microcontroller_debug_monitor.setMaximumHeight(100)  # set maximum height to 100 pixels
+        self.microcontroller_debug_monitor.setReadOnly(True)
+        receive_layout_microcontroller.addWidget(self.microcontroller_debug_monitor)
+
+        # Add microcontroller debug monitor layout to the main layout
+        microcontroller_layout.addLayout(receive_layout_microcontroller)
+
+        return microcontroller_layout
+
+    def create_status_layout(self):
+        status_layout = QVBoxLayout()
+
+        # Add spacing
+        status_layout.setSpacing(10)
+
+        # Create printer status layout
+        printer_status_layout = QHBoxLayout()
+        printer_status_label = QLabel('Printer:')
+        printer_status_layout.addWidget(printer_status_label)
+        self.printer_status_value = QLabel('Offline')
+        printer_status_layout.addWidget(self.printer_status_value)
+
+        # Create microcontroller status layout
+        microcontroller_status_layout = QHBoxLayout()
+        microcontroller_status_label = QLabel('Microcontroller:')
+        microcontroller_status_layout.addWidget(microcontroller_status_label)
+        self.microcontroller_status_value = QLabel('Offline')
+        microcontroller_status_layout.addWidget(self.microcontroller_status_value)
+
+        # Add printer and microcontroller status layouts to the status_layout
+        status_layout.addLayout(printer_status_layout)
+        status_layout.addLayout(microcontroller_status_layout)
+
+        # Create gif layout
+        gif_layout = QHBoxLayout()
+
+        # Add printer gif
+        self.printer_status_gif_label = QLabel()
+        printer_gif_movie = QMovie('3doff1.png')
+        self.printer_status_gif_label.setMovie(printer_gif_movie)
+        printer_gif_movie.start()
+        gif_layout.addWidget(self.printer_status_gif_label)
+
+        # Add microcontroller gif
+        self.microcontroller_status_gif_label = QLabel()
+        microcontroller_gif_movie = QMovie('resized_MCU_OFF.gif')
+        self.microcontroller_status_gif_label.setMovie(microcontroller_gif_movie)
+        microcontroller_gif_movie.start()
+        gif_layout.addWidget(self.microcontroller_status_gif_label)
+
+        # Add gif layout to the status_layout
+        status_layout.addLayout(gif_layout)
+
+        return status_layout
+
+
+    ###################
+    def update_status(self, printer_status=None, microcontroller_status=None):
+        if printer_status:
+            self.status['printer'] = printer_status
+            self.printer_status_value.setText(printer_status)
+
+            printer_gif_path = {
+                'Offline': '3doff1.png',
+                'Online': 'printer_on.png',
+                'Testing': 'printing.gif',
+            }[printer_status]
+
+            printer_gif_movie = QMovie(printer_gif_path)
+            self.printer_status_gif_label.setMovie(printer_gif_movie)
+            printer_gif_movie.start()
+
+        if microcontroller_status:
+            self.status['microcontroller'] = microcontroller_status
+            self.microcontroller_status_value.setText(microcontroller_status)
+
+            microcontroller_gif_path = {
+                'Offline': 'resized_MCU_OFF.gif',
+                'Online': 'resized_MCU_ON.gif',
+                'Testing': 'activated.png',
+            }[microcontroller_status]
+
+            microcontroller_gif_movie = QMovie(microcontroller_gif_path)
+            self.microcontroller_status_gif_label.setMovie(microcontroller_gif_movie)
+            microcontroller_gif_movie.start()
+    ################
+
+
+
+    def connect_microcontroller(self):
+        port = self.microcontroller_port_combo.currentText()
+        baud = int(self.microcontroller_baud_combo.currentText())
+
+        try:
+            self.microcontroller_serial = serial.Serial(port, baud)
+            print("Microcontroller is now online!")
+
+            self.update_status(microcontroller_status='Online')
+
+            self.microcontroller_connect_button.setText('Disconnect')
+            self.microcontroller_connect_button.clicked.disconnect(self.connect_microcontroller)
+            self.microcontroller_connect_button.clicked.connect(self.disconnect_microcontroller)
+            # self.microcontroller_send_button.setEnabled(True)
+
+            # Start the serial reader thread
+            self.microcontroller_reader_thread = threading.Thread(target=self.read_microcontroller_serial)
+            self.microcontroller_reader_thread.daemon = True
+            self.microcontroller_reader_thread.start()
+
+        except:
+            self.microcontroller_debug_monitor.append('Failed to connect to microcontroller')
+            # self.microcontroller_send_button.setEnabled(False)
+
+    def connect(self):
+        port = self.port_combo.currentText()
+
+        baud = int(self.baud_combo.currentText())
+        try:
+            self.serial = serial.Serial(port, baud, timeout=10)
+            #print(self.serial)
+            print("Printer is now online!")
+            self.update_status(printer_status='Online')
+            self.connect_button.setText('Disconnect')
+            self.connect_button.clicked.disconnect(self.connect)
+            self.connect_button.clicked.connect(self.disconnect)
+            self.send_button.setEnabled(True)
+            self.test_button.setEnabled(True)  # Enable the Test button
+
+            # Start the serial reader thread
+            self.reader_thread = threading.Thread(target=self.read_serial)
+            self.reader_thread.daemon = True
+            self.reader_thread.start()
+
+            #self.m114_thread = threading.Thread(target=self.send_M114_thread)
+            #self.m114_thread.daemon = True
+            #self.m114_thread.start()
+
+        except:
+            self.debug_monitor.append('Failed to connect')
+
+            # Add the error message to the test data string
+            #self.test_data += "Failed to connect \n"
+            self.test_button.setEnabled(False)  # Disable the Test button
+
+    def disconnect_microcontroller(self):
+        if self.microcontroller_serial is not None:
+            self.microcontroller_reader_running = False  # Set the flag to stop the reader thread
+            self.microcontroller_serial.close()
+            self.microcontroller_serial = None
+            self.update_status(microcontroller_status='Offline')
+            self.microcontroller_connect_button.setText('Connect')
+            self.microcontroller_connect_button.clicked.disconnect(self.disconnect_microcontroller)
+            self.microcontroller_connect_button.clicked.connect(self.connect_microcontroller)
+            self.microcontroller_send_button.setEnabled(False)
+
+    def disconnect(self):
+        if self.serial is not None:
+            self.reader_running = False  # Set the flag to stop the reader thread
+            self.serial.close()
+            self.serial = None
+            self.update_status(printer_status='Offline')
+            self.connect_button.setText('Connect')
+            self.connect_button.clicked.disconnect(self.disconnect)
+            self.connect_button.clicked.connect(self.connect)
+            self.test_button.setEnabled(False)
+
+    def send(self):
+        if self.serial is None:
+            return
+        data = self.send_edit.toPlainText() + '\n'
+        self.serial.write(data.encode())
+        response = self.serial.readline().decode()
+        self.debug_monitor.append(response)
+
+    def read_microcontroller_serial(self):
+        self.microcontroller_reader_running = True
+
+        wait_time = True
+
+        while self.microcontroller_reader_running:
+            if self.microcontroller_serial is not None:
+                response = ''
+                while self.microcontroller_serial.inWaiting() > 0:
+                    foo = str(self.microcontroller_serial.read(self.microcontroller_serial.inWaiting()))
+                    # print(type(foo))
+                    # print('')
+                    if foo.startswith("b'"):
+                        response += foo
+                if response:
+                    # self.microcontroller_debug_monitor.append(response)
+                    # self.microcontroller_test_data += response
+
+                    activated_force = response.split(';')[1][:-5]  # records
+                    activated_signal = response.split(';')[0][2:]
+                    #print(response)
+                    self.microcontroller_debug_monitor.append(
+                        f"force: {activated_force}, signal: {activated_signal}")
+                    print(f"force: {activated_force}, signal: {activated_signal}")
+
+                    # store the force data & distance data
+                    self.force_data = activated_force
+                    #print(self.button_not_pressed)
+                    if activated_signal == "0":
+                        self.button_not_pressed = True
+                    if activated_signal == "1":
+                        self.button_not_pressed = False
+                        #print("button activated~")
+                        #self.append_single_data()
+                        #print(self.button_not_pressed)
+
+    def read_serial(self):
+        # global location_data
+        #self.send_M114()
+        self.reader_running = True
+        while self.reader_running:
+            if self.serial is not None:
+                response = ''
+                while self.serial.inWaiting() > 0:
+                    response += self.serial.read(self.serial.inWaiting()).decode()
+                #if r'X:[0-9].[0-9] Y:[0-9].[0-9] Z:[0-9].[0-9] E:[0-9].[0-9] Count X:[0-9]* Y:[0-9]* Z:[0-9]*' in response:
+                if response.startswith('X:'):
+                    # with self.location_lock:
+                    #     location_data = response
+                    # #     print(f"Location: {self.location}")
+                    self.debug_monitor.append(response)
+                    self.current_z = re.search(r'Z:(\d+\.\d+)', response).group(1)
+
+                    # Add the current response to the test data string
+                    #self.test_data += response
+
+                time.sleep(0.01)
+
+
+    # New added
+    """
+    #####################################################
+    Area Logic
+    #####################################################
+    """
+    def TEST(self):
+        self.update_status(printer_status='Testing')
+        self.update_status(microcontroller_status='Testing')
+        self.send_gcode_Test()
+
+    def send_gcode_Test(self):
+        # 先创建一个现成的list
+        testpoint_list = self.point_coords
+        # 先用一个坐标
+        # 从list里生成gcode
+        # 下面补充这个method，然后进行测试
+        round = 0
+        for point in testpoint_list:
+            self.local_increment_record = 0
+
+            x, y = point[0], point[1]
+            self.move_to_safe_z(50) #这里的45后面需要从profile里提取
+            self.move_to_xy(x, y)
+            self.move_to_surface(45.9) #这里的37后面需要从profile里提取
+            time.sleep(8)
+            self.send_single_gcode("M400\n")
+            self.increment_logic()
+            time.sleep(1)
+            self.send_M114()
+            time.sleep(1)
+            self.append_single_data()
+            time.sleep(1)
+
+            self.extract_distance_data()
+            self.local_increment_list.append(self.local_increment_record) # append the increment result to the list
+            print(self.z_activation) #print out to see the result
+            print(self.current_z)
+            self.z_activation_list.append(self.current_z)
+
+            self.point_coords[round][2] = 45.7 - float(self.current_z) # give the current_z value back to the point_coords
+            self.point_coords[round][3] = self.force_data
+            round += 1
+
+            if self.button_not_pressed is False:
+                self.move_to_safe_z(45)
+
+        self.move_to_safe_z(50)
+        print("z_activation_list:", self.z_activation_list)
+        print("local_increment_list:", self.local_increment_list)
+        self.print_points()
+        self.display_test_results()
+        self.update_status(printer_status='Online')
+        self.update_status(microcontroller_status='Online')
+
+    """
+    #####################################################
+    Generate points
+    #####################################################
+    """
+
+
+
+    def generate_points(self, radius_button, num, mode):
+        global BUTTON_MAX_COORD
+        #radius_button = 3
+        #numPoints = 5
+
+        new_center = [132.5, 118.4] # This value is fixed, but need to recalibrate
+        radius = radius_button - 0.1
+
+        plot_centre = BUTTON_MAX_COORD/2 # scale to heatmap coordinates so that the heatmap and testpoints graphs are consistent
+        plot_radius = BUTTON_MAX_COORD/2
+
+        points = []
+        points.append([new_center[0], new_center[1], None, None])
+        x = []
+        y = []
+        x.append(plot_centre)
+        y.append(plot_centre)
+
+        if mode == 'rings': #user inputted number of rings (generate equidistant rings)
+            num = min(num, 7) # no more than 7 rings
+            total_points = 3 # number of points to be plotted in the current ring
+            curr_ring = 0
+            curr_radius = radius/num # radius of current ring that is being generated
+            curr_points = 0
+            angle = 0
+
+            while curr_ring < num:
+                while curr_points < total_points:
+                    angle += 2 * math.pi / total_points
+                    curr_x = curr_radius * math.cos(angle) + new_center[0]
+                    curr_y = curr_radius * math.sin(angle) + new_center[1]
+
+                    # normalized coords to be plotted (different than the coords sent to the 3D-printer)
+                    x.append(round((curr_x - new_center[0]) * BUTTON_MAX_COORD / 2 / radius_button + plot_centre))
+                    y.append(round((curr_y - new_center[1]) * BUTTON_MAX_COORD / 2 / radius_button + plot_centre))
+
+                    curr_points += 1
+
+                curr_points = 0
+                angle += math.pi
+                curr_radius += radius/num
+                total_points += 3 #add 3 points per ring away from centre
+                curr_ring += 1
+
+
+        else: # user inputted number of points (generate equidistant points)
+            num = min(num, 99) # no more than 99 points
+
+            boundary = math.sqrt(num)
+            phi = (math.sqrt(5) + 1) / 2
+
+            for k in range(1, num):
+                if k > num - boundary:
+                    r = radius
+                else:
+                    r = radius * math.sqrt(k - 1 / 2) / math.sqrt(num - (boundary + 1) / 2)
+
+                angle = k * 2 * math.pi / phi / phi
+                curr_x = r * math.cos(angle) + new_center[0]
+                curr_y = r * math.sin(angle) + new_center[1]
+                points.append([round(curr_x, 2), round(curr_y, 2), None, None])
+
+                #normalized coords to be plotted (different than the coords sent to the 3D-printer)
+                x.append(round((curr_x - new_center[0])*BUTTON_MAX_COORD/2/radius_button + plot_centre))
+                y.append(round((curr_y - new_center[1])*BUTTON_MAX_COORD/2/radius_button + plot_centre))
+
+
+        self.point_coords = points
+        print(points)
+
+        try:
+            testpointsWindow = tkinter.Tk()
+            testpointsWindow.title('Generated Testpoints')
+            testpointsWindow.geometry('650x620')
+            testpointsWindow.configure(bg='white')
+
+            fig = plt.Figure(figsize=(5.5, 5.2))
+            fig.tight_layout()
+            testpoints_fig = fig.add_subplot(111)
+
+            # button circumference
+            circle = plt.Circle((plot_centre, plot_centre), plot_radius, color='c')
+            testpoints_fig.add_patch(circle)
+
+            colour = np.linspace(0, 1, len(x))
+
+            #for i, (x, y, _, _) in enumerate(points):
+            #    testpoints_fig.scatter(x, y, c=colour)
+            testpoints_fig.scatter(x, y, c=colour)
+
+            testpoints_fig.set_xlabel('x-position')
+            testpoints_fig.set_ylabel('y-position')
+            testpoints_fig.set_title("Testpoint Locations")
+            canvas = FigureCanvasTkAgg(fig, master=testpointsWindow)
+            canvas.draw()
+            canvas.get_tk_widget().pack()
+
+            instr = tkinter.StringVar(testpointsWindow)
+            instrLabel = tkinter.Label(testpointsWindow, textvariable=instr, bg='white', fg='blue')
+            instr.set("The cyan circle represents the button. The dots represent the generated testpoints.\n" +
+                      "Darker dots will be tested first.")
+            instrLabel.pack(anchor='center', padx=5, pady=5)
+            testpointsWindow.mainloop()
+
+        finally:
+            return 1
+
+        return 1
+
+    def print_points(self):
+        if self.point_coords:
+            for point in self.point_coords:
+                print(point)
+        else:
+            print("No points generated yet")
+
+# 底下都是工具method
+
+    """
+    #####################################################
+    Send
+    #####################################################
+    """
+    def send_M114(self):
+        self.send_single_gcode("M114\n")
+    def send_single_gcode(self, gcommand):
+        try:
+            if self.serial is not None:
+                self.serial.write(gcommand.encode())
+                self.serial.write(gcommand.encode())
+        except Exception as e:
+            print("333")
+            print(f"Error: {e}")
+
+    """
+    #####################################################
+    Move & increment
+    #####################################################
+    """
+    def move_to_xy(self, x_coord, y_coord):
+        gcode = f'G1 X{x_coord} Y{y_coord}\n'
+        self.send_single_gcode(gcode)
+
+    def move_to_surface(self, z_coord):
+        self.send_single_gcode("G90\n")
+        gcode = f'G0 Z{z_coord}\n'
+        self.send_single_gcode(gcode)
+
+    def move_to_safe_z(self, z_coord):
+        self.send_single_gcode("G90\n")
+        gcode = f'G0 Z{z_coord}\n'
+        self.send_single_gcode(gcode)
+
+    def increment_logic(self):
+        try:
+            while self.button_not_pressed:
+                if float(self.force_data) > 200:
+                    self.send_single_gcode("M112\n")
+                    exit(0)
+                self.send_single_gcode("G91\n")
+                self.send_single_gcode("G0 Z-0.01\n")
+                self.local_increment_record += 1  # local record of increment, can be used to compare with test result
+                if float(self.force_data) > 200: # or float(self.current_z) < 44.9
+                    self.send_single_gcode("M112\n")
+                    exit(0)
+            print("Increment process done")
+            return
+        except Exception as e:
+            print("111")
+            print(f"Error: {e}")
+
+
+    """
+    #####################################################
+    Data
+    #####################################################
+    """
+    def append_single_data(self):
+        try:
+            self.send_single_gcode("M114\n")
+            response = self.serial.readline().decode()
+            self.debug_monitor.append(response)
+            # 这里逻辑要和serial相关，很重要，要一点点弄清楚
+        except Exception as e:
+            print("222")
+            print(f"Error: {e}")
+
+    def extract_distance_data(self):
+        try:
+            self.send_M114()
+            z_value = re.search(r'Z:(\d+\.\d+)', self.debug_monitor.toPlainText()).group(1)
+            self.z_activation = float(z_value)
+            z_activation_distance = 45.7 - float(z_value)
+
+        except AttributeError:
+            print('Error: Unable to extract Z value from debug monitor')
+            return
+
+
+
+
+
+
+
+
+
+
+class AreaModeWindow(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.serial = None
+        self.ESPserial = None
+        self.location = None  # Initialize location variable
+        self.location_lock = threading.Lock()
+        self.button_not_pressed = True
+        self.point_coords = None
+
+        #self.gf = general_function
+        self.force_data = None
+        self.distance_data = None
+        self.activation = None
+        self.on_surface = False
+        self.current_z = None
+
+        self.local_increment_record = None
+        self.local_increment_list = []
+        self.z_activation = None
+        self.z_activation_list = []
+
+        self.surface_z = None
+
+        #################
+        self.status = {
+            'printer': 'Offline',
+            'microcontroller': 'Offline',
+        }
+        #################
+
+        self.init_ui()
+
+
+    def init_ui(self):
+        main_layout = QHBoxLayout(self)
+
+        # Create left layout
+        left_layout = QVBoxLayout()
+
+        # Group 3D printer and microcontroller layouts in separate QGroupBoxes
+        printer_groupbox = QGroupBox("3D Printer")
+        microcontroller_groupbox = QGroupBox("Microcontroller")
+        status_groupbox = QGroupBox("Status")
+
+        printer_layout = self.create_printer_layout()
+        microcontroller_layout = self.create_microcontroller_layout()
+        status_layout = self.create_status_layout()
+
+        printer_groupbox.setLayout(printer_layout)
+        microcontroller_groupbox.setLayout(microcontroller_layout)
+        status_groupbox.setLayout(status_layout)
+
+        left_layout.addWidget(printer_groupbox)
+        left_layout.addWidget(microcontroller_groupbox)
+        left_layout.addWidget(status_groupbox)
+        left_layout.addStretch()
+
+        # Add left layout to the main layout
+        main_layout.addLayout(left_layout)
+
+        # Create right layout
+        right_layout = QVBoxLayout()
+
+        # Add first heatmap widget (activation force)
+        self.heatmap_widget1 = HeatmapWidget(data_type='force')
+        right_layout.addWidget(self.heatmap_widget1)
+
+        # Add second heatmap widget (activation distance)
+        self.heatmap_widget2 = HeatmapWidget(data_type='distance')
+        right_layout.addWidget(self.heatmap_widget2)
+
+        # Add right layout to the main layout
+        main_layout.addLayout(right_layout)
+
+        self.setWindowTitle('NeoPrint - Single Mode')
+        self.resize(800, 400)
+
+    def create_printer_layout(self):
+
+        # Create 3D printer layout
+        printer_layout = QVBoxLayout()
+
+        printer_layout.setSpacing(10)
+
+        # Create button layout
+        button_layout = QHBoxLayout()
+        button_label = QLabel('Button Model:')
+        button_layout.addWidget(button_label)
+        self.button_combo = QComboBox()
+        self.button_combo.addItems(['Button Profile 1', 'Button Profile 2'])
+        button_layout.addWidget(self.button_combo)
+        self.test_button = QPushButton('Test')
+        self.test_button.clicked.connect(self.TEST)
+        button_layout.addWidget(self.test_button)
+        printer_layout.addLayout(button_layout)
+
+        # Create radio buttons for point generation options
+        point_generation_layout = QHBoxLayout()
+        point_generation_label = QLabel('Point Generation Options:')
+        point_generation_layout.addWidget(point_generation_label)
+        self.rings_radio = QRadioButton('Specify No. Rings', self)
+        self.points_radio = QRadioButton('Specify No. Points', self)
+        point_generation_layout.addWidget(self.rings_radio)
+        point_generation_layout.addWidget(self.points_radio)
+        printer_layout.addLayout(point_generation_layout)
+
+        # Create generate point button layout
+        test_point_layout = QHBoxLayout()
+        self.test_point_label = QLabel('Number of Rings:')
+        test_point_layout.addWidget(self.test_point_label)
+        self.test_point_edit = QTextEdit(self)
+        self.test_point_edit.setMaximumHeight(28)
+        self.test_point_edit.setMaximumWidth(80)
+        test_point_layout.addWidget(self.test_point_edit)
+        self.generate_button = QPushButton('Generate')
+        self.generate_button.clicked.connect(self.click_to_generate_points)
+        test_point_layout.addWidget(self.generate_button)
+        printer_layout.addLayout(test_point_layout)
+
+        # Create Test button
+        self.TESTbutton = QPushButton('TESTBY')
+        self.TESTbutton.clicked.connect(self.TEST)
+        test_point_layout.addWidget(self.TESTbutton)
+
+        # Create port layout
+        port_layout = QHBoxLayout()
+        port_label = QLabel('Port:')
+        port_layout.addWidget(port_label)
+        self.port_combo = QComboBox()
+        self.port_combo.addItems(['COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8'])
+        port_layout.addWidget(self.port_combo)
+
+        # Create baud layout
+        baud_layout = QHBoxLayout()
+        baud_label = QLabel('Baud Rate:')
+        baud_layout.addWidget(baud_label)
+        self.baud_combo = QComboBox()
+        self.baud_combo.addItems(['9600', '19200', '38400', '57600', '115200'])
+        baud_layout.addWidget(self.baud_combo)
+
+        # Create connect button layout
+        connect_layout = QHBoxLayout()
+        self.connect_button = QPushButton('Connect')
+        self.connect_button.clicked.connect(self.connect)
+        connect_layout.addWidget(self.connect_button)
+
+        # Combine port and baud layouts
+        port_baud_layout = QHBoxLayout()
+        port_baud_layout.addLayout(port_layout)
+        port_baud_layout.addLayout(baud_layout)
+        port_baud_layout.addLayout(connect_layout)
+        printer_layout.addLayout(port_baud_layout)
+
+        # Create send layout
+        send_layout = QHBoxLayout()
+        send_label = QLabel('Send:')
+        send_layout.addWidget(send_label)
+        self.send_edit = QTextEdit()
+        self.send_edit.setMaximumHeight(80)  # set maximum height to 50 pixels
+        send_layout.addWidget(self.send_edit)
+        self.send_button = QPushButton('Send')
+        self.send_button.setEnabled(False)
+        self.send_button.clicked.connect(self.send)
+        send_layout.addWidget(self.send_button)
+        printer_layout.addLayout(send_layout)
+
+        # Create receive layout
+        receive_layout = QHBoxLayout()
+        receive_label = QLabel('Receive:')
+        receive_layout.addWidget(receive_label)
+        self.debug_monitor = QTextEdit()
+        self.debug_monitor.setMaximumHeight(100)  # set maximum height to 50 pixels
+        self.debug_monitor.setReadOnly(True)
+        receive_layout.addWidget(self.debug_monitor)
+        printer_layout.addLayout(receive_layout)
+
+        # Set up radio button connections
+        self.rings_radio.clicked.connect(self.updatePointGeneration)
+        self.points_radio.clicked.connect(self.updatePointGeneration)
+        self.rings_radio.setChecked(True)  # default selection
+
+        return printer_layout
+
+
+    def updatePointGeneration(self):
+        if self.rings_radio.isChecked():
+            self.test_point_label.setText('Number of Rings:')
+        else:
+            self.test_point_label.setText('Number of Points:')
+
+
+    def create_microcontroller_layout(self):
+        microcontroller_layout = QVBoxLayout()
+        microcontroller_layout.setSpacing(10)
+
+        # Create microcontroller port layout
+        microcontroller_port_layout = QHBoxLayout()
+        microcontroller_port_label = QLabel('Microcontroller Port:')
+        microcontroller_port_layout.addWidget(microcontroller_port_label)
+        self.microcontroller_port_combo = QComboBox()
+        self.microcontroller_port_combo.addItems(['COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8'])
+        microcontroller_port_layout.addWidget(self.microcontroller_port_combo)
+
+        # Create microcontroller baud layout
+        microcontroller_baud_layout = QHBoxLayout()
+        microcontroller_baud_label = QLabel('Microcontroller Baud Rate:')
+        microcontroller_baud_layout.addWidget(microcontroller_baud_label)
+        self.microcontroller_baud_combo = QComboBox()
+        self.microcontroller_baud_combo.addItems(['9600', '19200', '38400', '57600', '115200'])
+        microcontroller_baud_layout.addWidget(self.microcontroller_baud_combo)
+
+        # Create microcontroller connect button layout
+        microcontroller_connect_layout = QHBoxLayout()
+        self.microcontroller_connect_button = QPushButton('Connect')
+        self.microcontroller_connect_button.clicked.connect(self.connect_microcontroller)
+        microcontroller_connect_layout.addWidget(self.microcontroller_connect_button)
+
+        # Combine microcontroller port, baud, and connect button layouts
+        microcontroller_port_baud_layout = QHBoxLayout()
+        microcontroller_port_baud_layout.addLayout(microcontroller_port_layout)
+        microcontroller_port_baud_layout.addLayout(microcontroller_baud_layout)
+        microcontroller_port_baud_layout.addLayout(microcontroller_connect_layout)
+
+        # Add microcontroller port and baud layouts to main layout
+        microcontroller_layout.addLayout(microcontroller_port_baud_layout)
+
+        # Create microcontroller debug monitor layout
+        receive_layout_microcontroller = QHBoxLayout()
+        receive_label_microcontroller = QLabel('Microcontroller Receive:')
+        receive_layout_microcontroller.addWidget(receive_label_microcontroller)
+        self.microcontroller_debug_monitor = QTextEdit()
+        self.microcontroller_debug_monitor.setMaximumHeight(100)  # set maximum height to 100 pixels
+        self.microcontroller_debug_monitor.setReadOnly(True)
+        receive_layout_microcontroller.addWidget(self.microcontroller_debug_monitor)
+
+        # Add microcontroller debug monitor layout to the main layout
+        microcontroller_layout.addLayout(receive_layout_microcontroller)
+
+        return microcontroller_layout
+
+    def create_status_layout(self):
+        status_layout = QVBoxLayout()
+
+        # Add spacing
+        status_layout.setSpacing(10)
+
+        # Create printer status layout
+        printer_status_layout = QHBoxLayout()
+        printer_status_label = QLabel('Printer:')
+        printer_status_layout.addWidget(printer_status_label)
+        self.printer_status_value = QLabel('Offline')
+        printer_status_layout.addWidget(self.printer_status_value)
+
+        # Create microcontroller status layout
+        microcontroller_status_layout = QHBoxLayout()
+        microcontroller_status_label = QLabel('Microcontroller:')
+        microcontroller_status_layout.addWidget(microcontroller_status_label)
+        self.microcontroller_status_value = QLabel('Offline')
+        microcontroller_status_layout.addWidget(self.microcontroller_status_value)
+
+        # Add printer and microcontroller status layouts to the status_layout
+        status_layout.addLayout(printer_status_layout)
+        status_layout.addLayout(microcontroller_status_layout)
+
+        # Create gif layout
+        gif_layout = QHBoxLayout()
+
+        # Add printer gif
+        self.printer_status_gif_label = QLabel()
+        printer_gif_movie = QMovie('3doff1.png')
+        self.printer_status_gif_label.setMovie(printer_gif_movie)
+        printer_gif_movie.start()
+        gif_layout.addWidget(self.printer_status_gif_label)
+
+        # Add microcontroller gif
+        self.microcontroller_status_gif_label = QLabel()
+        microcontroller_gif_movie = QMovie('resized_MCU_OFF.gif')
+        self.microcontroller_status_gif_label.setMovie(microcontroller_gif_movie)
+        microcontroller_gif_movie.start()
+        gif_layout.addWidget(self.microcontroller_status_gif_label)
+
+        # Add gif layout to the status_layout
+        status_layout.addLayout(gif_layout)
+
+        return status_layout
+
+
+    ###################
+    def update_status(self, printer_status=None, microcontroller_status=None):
+        if printer_status:
+            self.status['printer'] = printer_status
+            self.printer_status_value.setText(printer_status)
+
+            printer_gif_path = {
+                'Offline': '3doff1.png',
+                'Online': 'printer_on.png',
+                'Testing': 'printing.gif',
+            }[printer_status]
+
+            printer_gif_movie = QMovie(printer_gif_path)
+            self.printer_status_gif_label.setMovie(printer_gif_movie)
+            printer_gif_movie.start()
+
+        if microcontroller_status:
+            self.status['microcontroller'] = microcontroller_status
+            self.microcontroller_status_value.setText(microcontroller_status)
+
+            microcontroller_gif_path = {
+                'Offline': 'resized_MCU_OFF.gif',
+                'Online': 'resized_MCU_ON.gif',
+                'Testing': 'activated.png',
+            }[microcontroller_status]
+
+            microcontroller_gif_movie = QMovie(microcontroller_gif_path)
+            self.microcontroller_status_gif_label.setMovie(microcontroller_gif_movie)
+            microcontroller_gif_movie.start()
+    ################
+
+
+
+    def connect_microcontroller(self):
+        port = self.microcontroller_port_combo.currentText()
+        baud = int(self.microcontroller_baud_combo.currentText())
+
+        try:
+            self.microcontroller_serial = serial.Serial(port, baud)
+            print("Microcontroller is now online!")
+            self.update_status(microcontroller_status='Online')
+            self.microcontroller_connect_button.setText('Disconnect')
+            self.microcontroller_connect_button.clicked.disconnect(self.connect_microcontroller)
+            self.microcontroller_connect_button.clicked.connect(self.disconnect_microcontroller)
+            # self.microcontroller_send_button.setEnabled(True)
+
+            # Start the serial reader thread
+            self.microcontroller_reader_thread = threading.Thread(target=self.read_microcontroller_serial)
+            self.microcontroller_reader_thread.daemon = True
+            self.microcontroller_reader_thread.start()
+
+        except:
+            self.microcontroller_debug_monitor.append('Failed to connect to microcontroller')
+            # self.microcontroller_send_button.setEnabled(False)
+
+    def connect(self):
+        port = self.port_combo.currentText()
+
+        baud = int(self.baud_combo.currentText())
+        try:
+            self.serial = serial.Serial(port, baud, timeout=10)
+            #print(self.serial)
+            self.update_status(printer_status='Online')
+            print("Printer is now online!")
+            self.connect_button.setText('Disconnect')
+            self.connect_button.clicked.disconnect(self.connect)
+            self.connect_button.clicked.connect(self.disconnect)
+            self.send_button.setEnabled(True)
+            self.test_button.setEnabled(True)  # Enable the Test button
+
+            # Start the serial reader thread
+            self.reader_thread = threading.Thread(target=self.read_serial)
+            self.reader_thread.daemon = True
+            self.reader_thread.start()
+
+            #self.m114_thread = threading.Thread(target=self.send_M114_thread)
+            #self.m114_thread.daemon = True
+            #self.m114_thread.start()
+
+        except:
+            self.debug_monitor.append('Failed to connect')
+
+            # Add the error message to the test data string
+            #self.test_data += "Failed to connect \n"
+            self.test_button.setEnabled(False)  # Disable the Test button
+
+    def disconnect_microcontroller(self):
+        if self.microcontroller_serial is not None:
+            self.microcontroller_reader_running = False  # Set the flag to stop the reader thread
+            self.microcontroller_serial.close()
+            self.microcontroller_serial = None
+            self.update_status(microcontroller_status='Offline')
+            self.microcontroller_connect_button.setText('Connect')
+            self.microcontroller_connect_button.clicked.disconnect(self.disconnect_microcontroller)
+            self.microcontroller_connect_button.clicked.connect(self.connect_microcontroller)
+            self.microcontroller_send_button.setEnabled(False)
+
+    def disconnect(self):
+        if self.serial is not None:
+            self.reader_running = False  # Set the flag to stop the reader thread
+            self.serial.close()
+            self.serial = None
+            self.update_status(printer_status='Offline')
+            self.connect_button.setText('Connect')
+            self.connect_button.clicked.disconnect(self.disconnect)
+            self.connect_button.clicked.connect(self.connect)
+            self.test_button.setEnabled(False)
+
+    def send(self):
+        if self.serial is None:
+            return
+        data = self.send_edit.toPlainText() + '\n'
+        self.serial.write(data.encode())
+        response = self.serial.readline().decode()
+        self.debug_monitor.append(response)
+
+    def read_microcontroller_serial(self):
+        self.microcontroller_reader_running = True
+
+        wait_time = True
+
+        while self.microcontroller_reader_running:
+            if self.microcontroller_serial is not None:
+                response = ''
+                while self.microcontroller_serial.inWaiting() > 0:
+                    foo = str(self.microcontroller_serial.read(self.microcontroller_serial.inWaiting()))
+                    # print(type(foo))
+                    # print('')
+                    if foo.startswith("b'"):
+                        response += foo
+                if response:
+                    # self.microcontroller_debug_monitor.append(response)
+                    # self.microcontroller_test_data += response
+
+                    activated_force = response.split(';')[1][:-5]  # records
+                    activated_signal = response.split(';')[0][2:]
+                    #print(response)
+                    self.microcontroller_debug_monitor.append(
+                        f"force: {activated_force}, signal: {activated_signal}")
+                    print(f"force: {activated_force}, signal: {activated_signal}")
+
+                    # store the force data & distance data
+                    self.force_data = activated_force
+                    #print(self.button_not_pressed)
+                    if activated_signal == "0":
+                        self.button_not_pressed = True
+                    if activated_signal == "1":
+                        self.button_not_pressed = False
+                        #print("button activated~")
+                        #self.append_single_data()
+                        #print(self.button_not_pressed)
+
+    def read_serial(self):
+        # global location_data
+        #self.send_M114()
+        self.reader_running = True
+        while self.reader_running:
+            if self.serial is not None:
+                response = ''
+                while self.serial.inWaiting() > 0:
+                    response += self.serial.read(self.serial.inWaiting()).decode()
+                #if r'X:[0-9].[0-9] Y:[0-9].[0-9] Z:[0-9].[0-9] E:[0-9].[0-9] Count X:[0-9]* Y:[0-9]* Z:[0-9]*' in response:
+                if response.startswith('X:'):
+                    # with self.location_lock:
+                    #     location_data = response
+                    # #     print(f"Location: {self.location}")
+                    self.debug_monitor.append(response)
+                    self.current_z = re.search(r'Z:(\d+\.\d+)', response).group(1)
+
+                    # Add the current response to the test data string
+                    #self.test_data += response
+
+                time.sleep(0.01)
+
+
+    # New added
+    """
+    #####################################################
+    Area Logic
+    #####################################################
+    """
+    def TEST(self):
+        self.update_status(microcontroller_status='Testing')
+        self.update_status(printer_status='Testing')
+        self.send_gcode_Test()
+
+    def send_gcode_Test(self):
+        # 先创建一个现成的list
+        testpoint_list = self.point_coords
+        # 先用一个坐标
+        # 从list里生成gcode
+        # 下面补充这个method，然后进行测试
+        round = 0
+        for point in testpoint_list:
+            self.local_increment_record = 0
+
+            x, y = point[0], point[1]
+            self.move_to_safe_z(50) #这里的45后面需要从profile里提取
+            self.move_to_xy(x, y)
+            self.move_to_surface(45.9) #这里的37后面需要从profile里提取
+            time.sleep(5)
+            self.send_single_gcode("M400\n")
+            self.increment_logic()
+            time.sleep(1)
+            self.send_M114()
+            time.sleep(1)
+            self.append_single_data()
+            time.sleep(1)
+
+            self.extract_distance_data()
+            self.local_increment_list.append(self.local_increment_record) # append the increment result to the list
+            print(self.z_activation) #print out to see the result
+            print(self.current_z)
+            self.z_activation_list.append(self.current_z)
+
+            self.point_coords[round][2] = 45.7 - float(self.current_z) # give the current_z value back to the point_coords
+            self.point_coords[round][3] = self.force_data
+            round += 1
+
+            if self.button_not_pressed is False:
+                self.move_to_safe_z(45)
+
+        self.move_to_safe_z(50)
+        print("z_activation_list:", self.z_activation_list)
+        print("local_increment_list:", self.local_increment_list)
+        self.print_points()
+
+        self.update_status(printer_status='Online')
+        self.update_status(microcontroller_status='Online')
+        self.heatmap_widget1.update_heatmap(self.point_coords)
+        self.heatmap_widget2.update_heatmap(self.point_coords)
+
+
+    """
+    #####################################################
+    Generate points
+    #####################################################
+    """
+    def click_to_generate_points(self):
+        if self.rings_radio.isChecked():
+            self.generate_points(3, int(self.test_point_edit.toPlainText()), 'rings')
+        else:
+            self.generate_points(3, int(self.test_point_edit.toPlainText()), 'points')
+
+
+    def generate_points(self, radius_button, num, mode):
+        global BUTTON_MAX_COORD
+        #radius_button = 3
+        #numPoints = 5
+
+        new_center = [132.5, 118.4] # This value is fixed, but need to recalibrate
+        radius = radius_button - 1.1
+
+        plot_centre = BUTTON_MAX_COORD/2 # scale to heatmap coordinates so that the heatmap and testpoints graphs are consistent
+        plot_radius = BUTTON_MAX_COORD/2
+
+        points = []
+        points.append([new_center[0], new_center[1], None, None])
+        x = []
+        y = []
+        x.append(plot_centre)
+        y.append(plot_centre)
+
+        if mode == 'rings': #user inputted number of rings (generate equidistant rings)
+            num = min(num, 7) # no more than 7 rings
+            total_points = 3 # number of points to be plotted in the current ring
+            curr_ring = 0
+            curr_radius = radius/num # radius of current ring that is being generated
+            curr_points = 0
+            angle = 0
+
+            while curr_ring < num:
+                while curr_points < total_points:
+                    angle += 2 * math.pi / total_points
+                    curr_x = curr_radius * math.cos(angle) + new_center[0]
+                    curr_y = curr_radius * math.sin(angle) + new_center[1]
+
+                    # normalized coords to be plotted (different than the coords sent to the 3D-printer)
+                    x.append(round((curr_x - new_center[0]) * BUTTON_MAX_COORD / 2 / radius_button + plot_centre))
+                    y.append(round((curr_y - new_center[1]) * BUTTON_MAX_COORD / 2 / radius_button + plot_centre))
+                    points.append(
+                        [round((curr_x - new_center[0]) * BUTTON_MAX_COORD / 2 / radius_button + new_center[0], 2),
+                         round((curr_y - new_center[1]) * BUTTON_MAX_COORD / 2 / radius_button + new_center[1], 2),
+                         None, None])
+                    curr_points += 1
+
+                curr_points = 0
+                angle += math.pi
+                curr_radius += radius/num
+                total_points += 3 #add 3 points per ring away from centre
+                curr_ring += 1
+
+
+        else: # user inputted number of points (generate equidistant points)
+            num = min(num, 99) # no more than 99 points
+
+            boundary = math.sqrt(num)
+            phi = (math.sqrt(5) + 1) / 2
+
+            for k in range(1, num):
+                if k > num - boundary:
+                    r = radius
+                else:
+                    r = radius * math.sqrt(k - 1 / 2) / math.sqrt(num - (boundary + 1) / 2)
+
+                angle = k * 2 * math.pi / phi / phi
+                curr_x = r * math.cos(angle) + new_center[0]
+                curr_y = r * math.sin(angle) + new_center[1]
+                points.append(
+                    [round((curr_x - new_center[0]) * BUTTON_MAX_COORD / 2 / radius_button + new_center[0], 2),
+                     round((curr_y - new_center[1]) * BUTTON_MAX_COORD / 2 / radius_button + new_center[1], 2), None,
+                     None])
+
+                #normalized coords to be plotted (different than the coords sent to the 3D-printer)
+                x.append(round((curr_x - new_center[0])*BUTTON_MAX_COORD/2/radius_button + plot_centre))
+                y.append(round((curr_y - new_center[1])*BUTTON_MAX_COORD/2/radius_button + plot_centre))
+
+
+        self.point_coords = points
+        print(points)
+
+        try:
+            testpointsWindow = tkinter.Tk()
+            testpointsWindow.title('Generated Testpoints')
+            testpointsWindow.geometry('650x620')
+            testpointsWindow.configure(bg='white')
+
+            fig = plt.Figure(figsize=(5.5, 5.2))
+            fig.tight_layout()
+            testpoints_fig = fig.add_subplot(111)
+
+            # button circumference
+            circle = plt.Circle((plot_centre, plot_centre), plot_radius, color='c')
+            testpoints_fig.add_patch(circle)
+
+            colour = np.linspace(0, 1, len(x))
+
+            #for i, (x, y, _, _) in enumerate(points):
+            #    testpoints_fig.scatter(x, y, c=colour)
+            testpoints_fig.scatter(x, y, c=colour)
+
+            testpoints_fig.set_xlabel('x-position')
+            testpoints_fig.set_ylabel('y-position')
+            testpoints_fig.set_title("Testpoint Locations")
+            canvas = FigureCanvasTkAgg(fig, master=testpointsWindow)
+            canvas.draw()
+            canvas.get_tk_widget().pack()
+
+            instr = tkinter.StringVar(testpointsWindow)
+            instrLabel = tkinter.Label(testpointsWindow, textvariable=instr, bg='white', fg='blue')
+            instr.set("The cyan circle represents the button. The dots represent the generated testpoints.\n" +
+                      "Darker dots will be tested first.")
+            instrLabel.pack(anchor='center', padx=5, pady=5)
+            testpointsWindow.mainloop()
+
+        finally:
+            return 1
+
+        return 1
+
+    def print_points(self):
+        if self.point_coords:
+            for point in self.point_coords:
+                print(point)
+        else:
+            print("No points generated yet")
+
+# 底下都是工具method
+
+    """
+    #####################################################
+    Send
+    #####################################################
+    """
+    def send_M114(self):
+        self.send_single_gcode("M114\n")
+    def send_single_gcode(self, gcommand):
+        try:
+            if self.serial is not None:
+                self.serial.write(gcommand.encode())
+                self.serial.write(gcommand.encode())
+        except Exception as e:
+            print("333")
+            print(f"Error: {e}")
+
+    """
+    #####################################################
+    Move & increment
+    #####################################################
+    """
+    def move_to_xy(self, x_coord, y_coord):
+        gcode = f'G1 X{x_coord} Y{y_coord}\n'
+        self.send_single_gcode(gcode)
+
+    def move_to_surface(self, z_coord):
+        self.send_single_gcode("G90\n")
+        gcode = f'G0 Z{z_coord}\n'
+        self.send_single_gcode(gcode)
+
+    def move_to_safe_z(self, z_coord):
+        self.send_single_gcode("G90\n")
+        gcode = f'G0 Z{z_coord}\n'
+        self.send_single_gcode(gcode)
+
+    def increment_logic(self):
+        try:
+            while self.button_not_pressed:
+                if float(self.force_data) > 200:
+                    self.send_single_gcode("M112\n")
+                    exit(0)
+                self.send_single_gcode("G91\n")
+                self.send_single_gcode("G0 Z-0.01\n")
+                self.local_increment_record += 1  # local record of increment, can be used to compare with test result
+                if float(self.force_data) > 200: # or float(self.current_z) < 44.9
+                    self.send_single_gcode("M112\n")
+                    exit(0)
+            print("Increment process done")
+            return
+        except Exception as e:
+            print("111")
+            print(f"Error: {e}")
+
+
+    """
+    #####################################################
+    Data
+    #####################################################
+    """
+    def append_single_data(self):
+        try:
+            self.send_single_gcode("M114\n")
+            response = self.serial.readline().decode()
+            self.debug_monitor.append(response)
+            # 这里逻辑要和serial相关，很重要，要一点点弄清楚
+        except Exception as e:
+            print("222")
+            print(f"Error: {e}")
+
+    def extract_distance_data(self):
+        try:
+            self.send_M114()
+            z_value = re.search(r'Z:(\d+\.\d+)', self.debug_monitor.toPlainText()).group(1)
+            self.z_activation = float(z_value)
+            z_activation_distance = 45.7 - float(z_value)
+
+        except AttributeError:
+            print('Error: Unable to extract Z value from debug monitor')
+            return
+
+
+
+
+    # def generate_gcode(self, points, safe_z_height=5):
+    #     """
+    #     Generate G-code commands to probe a list of points.
+    #
+    #     :param points: List of points in the format [[x1, y1, None, None], [x2, y2, None, None], ...]
+    #     :param safe_z_height: The safe Z height for travel moves (default: 5)
+    #     :return: List of G-code commands
+    #     """
+    #     # Initialize an empty list to store the G-code commands
+    #     gcode_commands = []
+    #     # Add a G28 command to home all axes before starting the probing process
+    #     gcode_commands.append("G28")
+    #     for point in points:
+    #         x, y = point[0], point[1]
+    #         # Move the probe up to the safe Z height
+    #         gcode_commands.append(f"G1 Z{safe_z_height}")
+    #         # Move the probe to the XY coordinates of the testing point
+    #         gcode_commands.append(f"G1 X{x} Y{y}")
+    #         # Add the G30 command to perform a single Z-probe at the current XY position
+    #         gcode_commands.append("G30")
+    #     # Add a G28 command to home all axes after completing the probing process
+    #     gcode_commands.append("G0 Z50") #为了homing，这里可以设置一个temp的坐标然后完成下一个点
+    #     return gcode_commands
+
+    # def one_time_logic(self, x, y):
+    #     each_time_command = []
+    #     each_time_command.append(f"G1 Z{50}") # this 50 is about to change to a pre-set value
+    #     each_time_command.append(f"G1 X{x} Y{y}")
+
+
+
+
+
