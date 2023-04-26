@@ -35,13 +35,13 @@ Our testing system will be assembled on a 3D printer. For our project, we've cho
 ### 2. Order and assemble the activation circuit
 The activation circuit will be used to receive and send signals from the load cell and switch to a computer.
 
-All of the files and documentation can be found in the [/Hardware/PCB](/Hardware/PCB) folder.
+All of the files and documentation can be found in the [/Electronics/PCB](/Electronics/PCB) folder.
 
 ### 3. Order and assemble the force sensor
 
 The force sensor includes the load cell and its adapter. It will be used to send signals to the PCB during a testing routine.
 
-All of the documentation can be found in the [/Hardware/Sensor](/Hardware/Sensor) folder. Individual print files of the adapter can be found in [/3D Printing Files/Load Cell Adapter](/3D_Printing_Files/Load_Cell_Adapter) folder. The code to configure the microcontroller can be found in [/Software/ESP](/Software/ESP)
+All of the documentation can be found in the [/Electronics/Sensor](/Electronics/Sensor) folder. Individual print files of the adapter can be found in [/3D Printing Files/Load Cell Adapter](/3D_Printing_Files/Load_Cell_Adapter) folder. The code to configure the microcontroller can be found in [/Software/ESP](/Software/ESP)
 
 ### 4. Install and setup Neoprint, our testing system's user interface
 
