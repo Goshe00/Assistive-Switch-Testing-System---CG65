@@ -41,7 +41,7 @@ All of the files and documentation can be found in the [/Electronics/Activation_
 
 The force sensor includes the load cell and its adapter. It will be used to send signals to the PCB during a testing routine.
 
-All of the documentation can be found in the [/Electronics/Force Sensor](https://github.com/Goshe00/Assistive-Switch-Testing-System---CG65/tree/main/Electronics/Force%20Sensor) folder. Individual print files of the adapter can be found in [/3D_Printing_Files/Load_Cell_Adapter](https://github.com/Goshe00/Assistive-Switch-Testing-System---CG65/tree/main/3D%20Printing%20Files/Load%20Cell%20Adapter) folder. The code to configure the microcontroller can be found in [/Software/ESP](/Software/ESP)
+All of the documentation can be found in the [/Electronics/Force Sensor](https://github.com/Goshe00/Assistive-Switch-Testing-System---CG65/tree/main/Electronics/Force%20Sensor) folder. Individual print files of the adapter can be found in [/3D_Printing_Files/Load_Cell_Adapter](https://github.com/Goshe00/Assistive-Switch-Testing-System---CG65/tree/main/3D%20Printing%20Files/Load%20Cell%20Adapter) folder. The code to configure the microcontroller can be found in [/Software/ESP](https://github.com/Goshe00/Assistive-Switch-Testing-System---CG65/tree/main/Software/ESP32)
 
 ### 4. Install and setup Neoprint, our testing system's user interface
 
