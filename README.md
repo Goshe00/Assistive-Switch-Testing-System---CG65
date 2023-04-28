@@ -79,7 +79,7 @@ For this project, we only focused on building and testing the MMC60 Switch and I
 
 ### 2. Button profiles for other types of assistive switches
 
-The software requires the dimensions of the button to automatically generate testpoint locations. The current code uses the dimension of the MMC60 button (60mm diameter). To test other cylindrical buttons, the variables "BUTTON_MAX_COORD" and "self.window_size" in mode_window_layout.py would need to be changed to the diameter (in mm) of the button. Adding button profiles would make it easier to test different buttons   
+The software requires the dimensions of the button to automatically generate testpoint locations. The current code uses the dimension of the MMC60 button (60mm diameter and 45.7mm height). To test other cylindrical buttons, the variables "BUTTON_MAX_COORD" and "self.window_size" in mode_window_layout.py would need to be changed to the diameter (in mm) of the button, and "45.7" in the method send_gCode_Test would need to be changed to the height (in mm). Adding button profiles would make it easier for testing without having to edit the code each time we want to test a new button. A possible implementation is giving the user the option to add a new button profile (dimensions) or select from a previously saved profile. 
 
 
 ## License
