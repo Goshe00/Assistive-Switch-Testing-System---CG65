@@ -77,6 +77,9 @@ The detailed testing routine instructions can be found at [/Software/Neoprint](/
 
 For this project, we only focused on building and testing the MMC60 Switch and Interact Switch. The testing routine requires a specific locking jig design for different types of switches. We have developed a Locking Jig Design Guide in [/3D Printing Files](https://github.com/Goshe00/Assistive-Switch-Testing-System---CG65/blob/main/3D%20Printing%20Files/Locking%20Jig%20Design%20Guide.pdf) for future developments of other types of locking jig designs. 
 
+### 2. Button profiles for other types of assistive switches
+
+The software requires the dimensions of the button to automatically generate testpoint locations. The current code uses the dimension of the MMC60 button (60mm diameter). To test other cylindrical buttons, the variables "BUTTON_MAX_COORD" and "self.window_size" in mode_window_layout.py would need to be changed to the diameter (in mm) of the button. Adding button profiles would make it easier to test different buttons   
 
 
 ## License
