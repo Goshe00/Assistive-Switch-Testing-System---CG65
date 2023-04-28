@@ -17,12 +17,11 @@ After setting up the hardware...
 4. Select a baud rate of 115200 [2] and press Connect
 5. Select the port connected to the microcontroller [3] (see Device Manager > Ports)
 6. Select a baud rate of 115200 [4]  and press Connect 
-7. Select the button profile for the button-under-test [5]
-8. Enter the x coordinate of the desired test position [6]
-9. Enter the y coordinate of the desired test position [7]
-10. Press Generate [8] 
-11. Press TESTBY [9]
-12. Wait for the test to complete and view results on the bottom right [10]
+7. Enter the x coordinate of the desired test position [6]
+8. Enter the y coordinate of the desired test position [7]
+9. Press Generate [8] 
+10. Press TESTBY [9]
+11. Wait for the test to complete and view results on the bottom right [10]
 
 
 ### Multi Test-point Mode 
@@ -35,8 +34,7 @@ After setting up the hardware...
 4. Select a baud rate of 115200 [2] and press Connect
 5. Select the port connected to the microcontroller [3] (see Device Manager > Ports)
 6. Select a baud rate of 115200 [4]  and press Connect 
-7. Select the button profile for the button-under-test [5]
-8. Choose to either generate points in rings or scattered points [6]
-9. Select the number of rings or the number of points depending on the option selected in step 8 [7]
-10. Press "Generate" [8]
-11. Press "TESTBY" [9]
+7. Choose to either generate points in rings or scattered points [6]
+8. Select the number of rings or the number of points depending on the option selected in step 8 [7]
+9. Press "Generate" [8]
+10. Press "TESTBY" [9]
